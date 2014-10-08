@@ -8,6 +8,7 @@
 #include <thrust/random.h>
 #include "rasterizeKernels.h"
 #include "rasterizeTools.h"
+#include "cuPrintf.cu"
 
 glm::vec3* framebuffer;
 fragment* depthbuffer;

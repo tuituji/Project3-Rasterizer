@@ -27,6 +27,8 @@
 #include "utilities.h"
 #include "ObjCore/objloader.h"
 
+#include "cuPrintf.cuh"
+
 using namespace std;
 
 //-------------------------------

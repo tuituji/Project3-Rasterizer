@@ -27,10 +27,14 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="..\..\src\rasterizeKernels.cu" />
+    <CudaCompile Include="..\..\src\cuPrintf.cu" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="ObjCore">
       <UniqueIdentifier>{c37932d5-6627-43c3-9d6b-84866740745c}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\cuPrintf.cuh" />
   </ItemGroup>
 </Project>

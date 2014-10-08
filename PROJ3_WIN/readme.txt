@@ -11,3 +11,6 @@
 3. 将Project0中的glew32.dll拷贝到Debug目录下面（生成exe文件的目录）
 4. 将shaders目录拷贝到Debug目录下面。
 5. 添加了几个简单的场景文件
+
+添加cuPrintf
+参见cuda SDK simplePrintf

@@ -100,7 +100,13 @@ void runCuda(){
   ibosize = mesh->getIBOsize();
 
   cudaGLMapBufferObject((void**)&dptr, pbo);
+
+  // add printf
+  cudaPrintfInit();
   cudaRasterizeCore(dptr, glm::vec2(width, height), frame, vbo, vbosize, cbo, cbosize, ibo, ibosize);
+  cudaPrintfDisplay(stdout, true);
+  cudaPrintfEnd();
+
   cudaGLUnmapBufferObject(pbo);
 
   vbo = NULL;
