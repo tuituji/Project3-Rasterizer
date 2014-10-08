@@ -14,3 +14,6 @@
 
 添加cuPrintf
 参见cuda SDK simplePrintf
+
+
+添加简单的扫描线算法
