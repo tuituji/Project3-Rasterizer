@@ -17,6 +17,24 @@ float* device_cbo;
 int* device_ibo;
 triangle* primitives;
 
+
+
+__device__ void printPoint(glm::vec4 p)
+{
+	cuPrintf("(%f, %f, %f, %f)\n", p.x, p.y, p.z, p.w);
+}
+__device__ void printPoint(glm::vec3 p)
+{
+	cuPrintf("(%f, %f, %f)\n", p.x, p.y, p.z);
+}
+
+__device__ void printTri(triangle tri)
+{
+	cuPrintf("0: (%f %f %f, %d %d %d)\n", tri.p0.x, tri.p0.y, tri.p0.z, tri.c0.x, tri.c0.y,tri.c0.z);
+	cuPrintf("1: (%f %f %f, %d %d %d)\n", tri.p1.x, tri.p1.y, tri.p1.z, tri.c1.x, tri.c1.y,tri.c1.z);
+	cuPrintf("2: (%f %f %f, %d %d %d)\n", tri.p2.x, tri.p2.y, tri.p2.z, tri.c2.x, tri.c2.y,tri.c2.z);
+}
+
 void checkCUDAError(const char *msg) {
   cudaError_t err = cudaGetLastError();
   if( cudaSuccess != err) {
@@ -142,13 +160,75 @@ __global__ void primitiveAssemblyKernel(float* vbo, int vbosize, float* cbo, int
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   int primitivesCount = ibosize/3;
   if(index<primitivesCount){
+    int index0 = ibo[index * 3];
+    int index1 = ibo[index * 3 + 1];
+    int index2 = ibo[index * 3 + 2];
+
+    primitives[index].p0 = glm::vec3(vbo[index0 * 3], vbo[index0 * 3 + 1], vbo[index0 * 3 + 2]);
+    primitives[index].p1 = glm::vec3(vbo[index1 * 3], vbo[index1 * 3 + 1], vbo[index1 * 3 + 2]);
+    primitives[index].p2 = glm::vec3(vbo[index2 * 3], vbo[index2 * 3 + 1], vbo[index2 * 3 + 2]);
+
+    primitives[index].c0 = glm::vec3(cbo[index0 * 3], cbo[index0 * 3 + 1], cbo[index0 * 3 + 2]);
+    primitives[index].c1 = glm::vec3(cbo[index1 * 3], cbo[index1 * 3 + 1], cbo[index1 * 3 + 2]);
+    primitives[index].c2 = glm::vec3(cbo[index2 * 3], cbo[index2 * 3 + 1], cbo[index2 * 3 + 2]);
   }
+}
+
+
+//Converts a triangle from clip space to a screen resolution mapped space 
+//From (-1:1,-1:1,-1:1) to (0:w, 0:h, 0:1)
+__host__ __device__ void transTri2Screen(triangle &tri, glm::vec2 res)
+{
+	//Scale and shift x
+	tri.p0.x = (tri.p0.x + 1.0) * 0.5f * res.x;
+	tri.p1.x = (tri.p1.x + 1.0) * 0.5f * res.x;
+	tri.p2.x = (tri.p2.x + 1.0) * 0.5f * res.x;
+
+	//Scale and shift y
+	tri.p0.y = (-tri.p0.y + 1.0) * 0.5f * res.y;
+	tri.p1.y = (-tri.p1.y + 1.0) * 0.5f * res.y;
+	tri.p2.y = (-tri.p2.y + 1.0) * 0.5f * res.y;
+
+	//Scale and shift z
+	tri.p0.z = (tri.p0.z + 1.0) * 0.5f;
+	tri.p1.z = (tri.p1.z + 1.0) * 0.5f;
+	tri.p2.z = (tri.p2.z + 1.0) * 0.5f;
 }
 
 //TODO: Implement a rasterization method, such as scanline.
 __global__ void rasterizationKernel(triangle* primitives, int primitivesCount, fragment* depthbuffer, glm::vec2 resolution){
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   if(index<primitivesCount){
+    triangle tri = primitives[index];
+	transTri2Screen(tri, resolution);
+	glm::vec3 minBox, maxBox;
+	getAABBForTriangle(tri, minBox, maxBox);
+	int minX = glm::max(glm::floor(minBox.x), 0.0f);
+    int minY = glm::max(glm::floor(minBox.y), 0.0f);
+    int maxX = glm::min(glm::ceil(maxBox.x), resolution.x);
+    int maxY = glm::min(glm::ceil(maxBox.y), resolution.y);
+	cuPrintf("In raster %d %d %d %d\n", minX, maxX, minY, maxY);
+	int x, y;
+    for (x = minX; x < maxX; ++x) {
+      for (y = minY; y < maxY; ++y) {
+	    glm::vec3 bCoord = calculateBarycentricCoordinate(tri, glm::vec2(x, y));
+		if (!isBarycentricCoordInBounds(bCoord)) {
+		  continue;
+		}
+			
+		fragment frag;// use pointer mainly for the lock
+		frag = getFromDepthbuffer(x, y, depthbuffer, resolution);
+
+		glm::vec3 pos = bCoord.x * tri.p0 + bCoord.y * tri.p1 + bCoord.z * tri.p2;
+		if ( pos.z < frag.position.z) {
+			continue;
+		}
+		frag.color = bCoord.x * tri.c0 + bCoord.y * tri.c1 + bCoord.z * tri.c2;
+		frag.position = pos; //bCoord.x * tri.p0 + bCoord.y * tri.p1 + bCoord.z * tri.p2;
+		// now i do not lock it, so the result is not ok
+		writeToDepthbuffer(x, y, frag, depthbuffer, resolution);
+	  }
+	}
   }
 }
 
